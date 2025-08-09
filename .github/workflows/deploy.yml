@@ -1,17 +1,19 @@
-name: Build and Push to AWS ECR
+name: Build and Push to AWS ECR  # Workflow name shown in GitHub Actions
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main" ]         # Run this workflow only when pushing to the 'main' branch
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest       # Use the latest Ubuntu VM for the runner
 
     steps:
+      # Step 1: Checkout the repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 2: Configure AWS CLI credentials (from GitHub Secrets)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -19,15 +21,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Step 3: Login to AWS ECR (store registry URL in output)
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Step 4: Build & Push Docker Image with multiple tags
       - name: Build, tag, and push image to Amazon ECR
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}   # ECR registry (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com)
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}            # ECR repository name
+          IMAGE_TAG: latest                                       # Default tag
+          GIT_SHA: ${{ github.sha }}                              # Unique commit SHA
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          # Build the image and tag it twice: latest and commit SHA
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                       -t $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA .
+
+          # Push both tags to ECR
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GIT_SHA
+
